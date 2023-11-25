@@ -1,6 +1,7 @@
 import argparse
 import subprocess
 from string import Template
+from ipaddress import IPv4Address
 from wgconfig import WgConfig
 from wgconfig import IPList
 from wgconfig import IPWithMask
@@ -23,10 +24,16 @@ cfgs = list(map(WgConfig, args.configs))
 #modify configs so that:
 # - They all have the same FwMark
 # - AllowedIPs of vpn #n is set to the endpoint of vpn #n+1
+# - All IPv6 addresses removed
 # - DNS addresses af all configs removed except from last/innermost one
 before: WgConfig | None = None
 for cfg in cfgs:
     cfg.interface.fwmark = COMMON_FWMARK
+
+    cfg.interface.address = IPList([a for a in cfg.interface.address if isinstance(a.ip, IPv4Address)])
+    cfg.interface.dns = IPList([a for a in cfg.interface.dns if isinstance(a, IPv4Address)])
+    cfg.peer.allowedips = IPList([a for a in cfg.peer.allowedips if isinstance(a.ip, IPv4Address)])
+
     if not before:
         before = cfg
         continue
@@ -61,7 +68,7 @@ if len(cfgs) == 2:
     with open("wgchain/fwtemplate.sh", "r") as f:
         template = Template(f.read())
 
-    with open("fwon.sh", "w") as outfile:
+    with open("activate.sh", "w") as outfile:
         mapping = {"IFACENAME":ifacename,
                    "LOCALNET":localnet,
                    "VPN0":cfgs[0].ifname,

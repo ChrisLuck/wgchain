@@ -82,6 +82,13 @@ if len(cfgs) == 2:
         template = Template(f.read())
 
     activatefilepath = outdir / Path("activate.sh")
+
+    # remove potentially existing file (might have elevated permissions)
+    activatefilepath.unlink(missing_ok=True)
+
+    # create file with only user access. Will fail if file exists.
+    activatefilepath.touch(mode=0o700)
+
     with activatefilepath.open("w") as activatefile:
         mapping = {"IFACENAME":ifacename,
                    "LOCALNET":localnet,

@@ -117,5 +117,11 @@ class WgConfig():
         cfgparser['Interface'] = self.interface.__dict__
         cfgparser['Peer'] = self.peer.__dict__
 
+        # remove potentially existing file (might have elevated permissions)
+        file.unlink(missing_ok=True)
+
+        # create file with only user access, will fail if file already exists
+        file.touch(mode=0o600)
+
         with file.open('w') as configfile:
             cfgparser.write(configfile)

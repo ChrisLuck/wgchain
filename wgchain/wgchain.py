@@ -22,13 +22,13 @@ cfgs = list(map(WgConfig, args.configs))
 # - they all have the same FwMark
 # - AllowedIPs of vpn #n is set to the endpoint of vpn #n+1
 # - DNS?
-before : WgConfig | None = None
+before: WgConfig | None = None
 for cfg in cfgs:
-    cfg.interface.FwMark = COMMON_FWMARK
+    cfg.interface.fwmark = COMMON_FWMARK
     if not before:
         before = cfg
         continue
-    before.peer.AllowedIPs = IPList([IPWithMask(cfg.peer.Endpoint.ip + "/32")])
+    before.peer.allowedips = IPList([IPWithMask(str(cfg.peer.endpoint.ip) + "/32")])
 
 for cfg in cfgs:
     print("------")

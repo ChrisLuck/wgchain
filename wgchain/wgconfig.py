@@ -1,11 +1,39 @@
 import configparser
 from pathlib import Path
-from dataclasses import dataclass
-from dataclasses import field
-from dataclasses import InitVar
+from ipaddress import ip_address
 
-IP_MASK_DELIM = "/"
-IP_PORT_DELIM = ":"
+
+MASK_SEP = "/"
+PORT_SEP = ":"
+
+
+def split_ip(ip_with_port: str, separator: str):
+    ip, sep, port = ip_with_port.strip().rpartition(separator)
+    assert sep # separator must be present
+    ip = ip_address(ip.strip("[]")) # convert to `IPv4Address` or `IPv6Address` 
+    return ip, int(port)
+
+
+class IPWithMask():
+    def __init__(self, ipwithmask):
+        self.ip, self.mask = split_ip(ipwithmask, MASK_SEP)
+
+    def __eq__(self, other):
+        return self.ip == other.ip and self.mask == other.mask
+
+    def __repr__(self):
+        return str(self.ip) + MASK_SEP + str(self.mask)
+
+
+class IPWithPort():
+    def __init__(self, ipwithport: str):
+        self.ip, self.port = split_ip(ipwithport, PORT_SEP)
+
+    def __eq__(self, other):
+        return self.ip == other.ip and self.port == other.port
+
+    def __repr__(self):
+        return str(self.ip) + PORT_SEP + str(self.port)
 
 
 class IPList(list):
@@ -13,77 +41,57 @@ class IPList(list):
         return ", ".join(map(str, self))
 
 
-@dataclass
-class IPWithPort:
-    raw:  InitVar[str]
-    ip:   str = field(init=False)
-    port: int = field(init=False)
+class Interface():
+    def __init__(self, **args):
+        for (key, value) in args.items():
+            match key.lower():
+                case "address":
+                    self.parse_address(value)
+                case "listenport":
+                    self.listenport = int(value)
+                case "dns":
+                    self.parse_dns(value)
+                case "privatekey":
+                    self.privatekey = value.strip()
+                case "fwmark":
+                    self.fwmark = value.strip()
+                case _:
+                    print("Unknown key in Interface: ", key)
+                    exit(1)
 
-    def __post_init__(self, raw):
-        raw  = raw.strip()
-        self.ip   = raw.split(IP_PORT_DELIM)[0]
-        self.port = int(raw.split(IP_PORT_DELIM)[1])
+    def parse_address(self, addr_val: str):
+        self.address = IPList(IPWithMask(a) for a in addr_val.split(","))
 
-    def __repr__(self):
-        return self.ip + IP_PORT_DELIM + str(self.port)
-
-
-@dataclass
-class IPWithMask:
-    raw:  InitVar[str]
-    ip:   str = field(init=False)
-    mask: int = field(init=False)
-
-    def __post_init__(self, raw):
-        raw  = raw.strip()
-        self.ip   = raw.split(IP_MASK_DELIM)[0]
-        self.mask = int(raw.split(IP_MASK_DELIM)[1])
+    def parse_dns(self, dns_val: str):
+        self.dns = IPList(ip_address(a.strip()) for a in dns_val.split(","))
 
     def __repr__(self):
-        return self.ip + IP_MASK_DELIM + str(self.mask)
+        res = ""
+        for key, value in self.__dict__.items():
+            res += key + " = "
+            res += str(value) + "\n"
+        return res
 
 
-@dataclass
-class Interface:
-    PrivateKey:  str
-    Address:     IPList | str
-    ListenPort:  int | str | None    = field(default=None)
-    FwMark:      str | None          = field(default=None)
-    DNS:         IPList | str | None = field(default=None)
+class Peer():
+    def __init__(self, **args):
+        for (key, value) in args.items():
+            match key.lower():
+                case "allowedips":
+                    self.parse_allowedips(value)
+                case "publickey":
+                    self.publickey = value.strip()
+                case "endpoint":
+                    self.parse_endpoint(value)
+                case _:
+                    print("Unknown key in Peer: ", key)
+                    exit(2)
 
-    def __post_init__(self):
-        self.PrivateKey = self.PrivateKey.strip()
-        if type(self.Address) == str:
-            self.Address = IPList(map(lambda x: IPWithMask(x.strip()),
-                                      self.Address.split(",")))
-        if type(self.ListenPort) == str:
-            self.ListenPort = int(self.ListenPort)
-        if type(self.FwMark) == str:
-            self.FwMark = self.FwMark.strip()
-        if type(self.DNS) == str:
-            self.DNS = IPList(map(lambda x: x.strip(),
-                              self.DNS.split(",")))
+    def parse_allowedips(self, allowedips_val: str):
+        self.allowedips = IPList(IPWithMask(a) for a in allowedips_val.split(","))
 
-
-@dataclass
-class Peer:
-    AllowedIPs: IPList | str
-    Endpoint:   IPWithPort | str
-    PublicKey:  str = field(default="")
-
-    def __post_init__(self):
-        if type(self.AllowedIPs) == str:
-            self.AllowedIPs = IPList(map(lambda x: IPWithMask(x.strip()),
-                              self.AllowedIPs.split(",")))
-        if type(self.Endpoint) == str:
-            self.Endpoint = IPWithPort(self.Endpoint)
-        self.PublicKey = self.PublicKey.strip()
-
-
-# dataclass does not allow optional fields so I am working around this by
-# setting fields to None and filtering them later with this function.
-def filter_dict(inputdict: dict) -> dict:
-    return dict((k, v) for k, v in inputdict.items() if v != None )
+    def parse_endpoint(self, endpoint_val: str):
+        self.endpoint = IPWithPort(endpoint_val)
 
 
 class WgConfig():
@@ -101,12 +109,13 @@ class WgConfig():
         if 'Peer' in cfg:
             self.peer = Peer(**cfg['Peer'])
 
+
     def write(self, file='out.conf'):
         cfgparser = configparser.ConfigParser()
         cfgparser.optionxform = str #otherwise keys are stored lowercase
 
-        cfgparser['Interface'] = filter_dict(self.interface.__dict__)
-        cfgparser['Peer'] = filter_dict(self.peer.__dict__)
+        cfgparser['Interface'] = self.interface.__dict__
+        cfgparser['Peer'] = self.peer.__dict__
 
         with open(file, 'w') as configfile:
             cfgparser.write(configfile)

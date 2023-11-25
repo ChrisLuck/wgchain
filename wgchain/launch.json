@@ -1,0 +1,12 @@
+{
+  "configurations": [
+    {
+      "name": "Python: Current File (Integrated Terminal)",
+      "type": "python",
+      "request": "launch",
+      "program": "python3 wgchain.py"
+      "args" : ["test/vpn0.conf", "test/vpn0.conf"]
+    }
+  ]
+}
+

@@ -10,8 +10,8 @@ set -e
 set -o pipefail
 
 
-wg-quick up $VPN0
-wg-quick up $VPN1
+wg-quick up ./$VPN0.conf
+wg-quick up ./$VPN1.conf
 
 
 #disable ipv6

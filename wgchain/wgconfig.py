@@ -110,12 +110,12 @@ class WgConfig():
             self.peer = Peer(**cfg['Peer'])
 
 
-    def write(self, file='out.conf'):
+    def write(self, file=Path('out.conf')):
         cfgparser = configparser.ConfigParser()
         cfgparser.optionxform = str #otherwise keys are stored lowercase
 
         cfgparser['Interface'] = self.interface.__dict__
         cfgparser['Peer'] = self.peer.__dict__
 
-        with open(file, 'w') as configfile:
+        with file.open('w') as configfile:
             cfgparser.write(configfile)
